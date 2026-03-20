@@ -1,11 +1,11 @@
 import "dotenv/config";
 
-import { mkdirSync } from "node:fs";
-import { stdin as input, stdout as output } from "node:process";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
-import readline from "node:readline/promises";
 
 import {
 	getUserName as getAlphaUserName,
@@ -14,13 +14,8 @@ import {
 	logout as logoutAlpha,
 } from "@companion-ai/alpha-hub/lib";
 import {
-	AuthStorage,
-	createAgentSession,
-	createCodingTools,
-	DefaultResourceLoader,
 	ModelRegistry,
-	SessionManager,
-	SettingsManager,
+	AuthStorage,
 } from "@mariozechner/pi-coding-agent";
 
 import { FEYNMAN_SYSTEM_PROMPT } from "./feynman-prompt.js";
@@ -81,9 +76,39 @@ function normalizeThinkingLevel(value: string | undefined): ThinkingLevel | unde
 	return undefined;
 }
 
+function patchEmbeddedPiBranding(piPackageRoot: string): void {
+	const packageJsonPath = resolve(piPackageRoot, "package.json");
+	const cliPath = resolve(piPackageRoot, "dist", "cli.js");
+
+	if (existsSync(packageJsonPath)) {
+		const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+			piConfig?: { name?: string; configDir?: string };
+		};
+		if (pkg.piConfig?.name !== "feynman") {
+			pkg.piConfig = {
+				...pkg.piConfig,
+				name: "feynman",
+			};
+			writeFileSync(packageJsonPath, JSON.stringify(pkg, null, "\t") + "\n", "utf8");
+		}
+	}
+
+	if (existsSync(cliPath)) {
+		const cliSource = readFileSync(cliPath, "utf8");
+		if (cliSource.includes('process.title = "pi";')) {
+			writeFileSync(cliPath, cliSource.replace('process.title = "pi";', 'process.title = "feynman";'), "utf8");
+		}
+	}
+}
+
 async function main(): Promise<void> {
 	const here = dirname(fileURLToPath(import.meta.url));
 	const appRoot = resolve(here, "..");
+	const piPackageRoot = resolve(appRoot, "node_modules", "@mariozechner", "pi-coding-agent");
+	const piCliPath = resolve(appRoot, "node_modules", "@mariozechner", "pi-coding-agent", "dist", "cli.js");
+	const feynmanAgentDir = resolve(homedir(), ".feynman", "agent");
+	const bundledSettingsPath = resolve(appRoot, ".pi", "settings.json");
+	patchEmbeddedPiBranding(piPackageRoot);
 
 	const { values, positionals } = parseArgs({
 		allowPositionals: true,
@@ -136,147 +161,74 @@ async function main(): Promise<void> {
 	}
 
 	const workingDir = resolve(values.cwd ?? process.cwd());
-	const sessionDir = resolve(values["session-dir"] ?? resolve(appRoot, ".feynman", "sessions"));
+	const sessionDir = resolve(values["session-dir"] ?? resolve(homedir(), ".feynman", "sessions"));
 	mkdirSync(sessionDir, { recursive: true });
-	const settingsManager = SettingsManager.create(appRoot);
-
-	const authStorage = AuthStorage.create();
-	const modelRegistry = new ModelRegistry(authStorage);
-	const explicitModelSpec = values.model ?? process.env.FEYNMAN_MODEL;
-	const explicitModel = explicitModelSpec ? parseModelSpec(explicitModelSpec, modelRegistry) : undefined;
-
-	if (explicitModelSpec && !explicitModel) {
-		throw new Error(`Unknown model: ${explicitModelSpec}`);
+	mkdirSync(feynmanAgentDir, { recursive: true });
+	const feynmanSettingsPath = resolve(feynmanAgentDir, "settings.json");
+	if (!existsSync(feynmanSettingsPath) && existsSync(bundledSettingsPath)) {
+		writeFileSync(feynmanSettingsPath, readFileSync(bundledSettingsPath, "utf8"), "utf8");
 	}
 
-	if (!explicitModel) {
-		const available = await modelRegistry.getAvailable();
-		if (available.length === 0) {
-			throw new Error(
-				"No models are available. Configure pi auth or export a provider API key before starting Feynman.",
-			);
+	const explicitModelSpec = values.model ?? process.env.FEYNMAN_MODEL;
+	if (explicitModelSpec) {
+		const modelRegistry = new ModelRegistry(AuthStorage.create());
+		const explicitModel = parseModelSpec(explicitModelSpec, modelRegistry);
+		if (!explicitModel) {
+			throw new Error(`Unknown model: ${explicitModelSpec}`);
 		}
 	}
 
 	const thinkingLevel = normalizeThinkingLevel(values.thinking ?? process.env.FEYNMAN_THINKING) ?? "medium";
+	const oneShotPrompt = values.prompt;
+	const initialPrompt = oneShotPrompt ?? (positionals.length > 0 ? positionals.join(" ") : undefined);
 
-	const resourceLoader = new DefaultResourceLoader({
-		cwd: appRoot,
-		additionalExtensionPaths: [resolve(appRoot, "extensions")],
-		additionalPromptTemplatePaths: [resolve(appRoot, "prompts")],
-		additionalSkillPaths: [resolve(appRoot, "skills")],
-		settingsManager,
-		systemPromptOverride: () => FEYNMAN_SYSTEM_PROMPT,
-		appendSystemPromptOverride: () => [],
-	});
-	await resourceLoader.reload();
+	const piArgs = [
+		"--session-dir",
+		sessionDir,
+		"--extension",
+		resolve(appRoot, "extensions", "research-tools.ts"),
+		"--skill",
+		resolve(appRoot, "skills"),
+		"--prompt-template",
+		resolve(appRoot, "prompts"),
+		"--system-prompt",
+		FEYNMAN_SYSTEM_PROMPT,
+	];
 
-	const sessionManager = values["new-session"]
-		? SessionManager.create(workingDir, sessionDir)
-		: SessionManager.continueRecent(workingDir, sessionDir);
+	if (explicitModelSpec) {
+		piArgs.push("--model", explicitModelSpec);
+	}
+	if (thinkingLevel) {
+		piArgs.push("--thinking", thinkingLevel);
+	}
+	if (oneShotPrompt) {
+		piArgs.push("-p", oneShotPrompt);
+	}
+	else if (initialPrompt) {
+		piArgs.push(initialPrompt);
+	}
 
-	const { session } = await createAgentSession({
-		authStorage,
+	const child = spawn(process.execPath, [piCliPath, ...piArgs], {
 		cwd: workingDir,
-		model: explicitModel,
-		modelRegistry,
-		resourceLoader,
-		sessionManager,
-		settingsManager,
-		thinkingLevel,
-		tools: createCodingTools(workingDir),
+		stdio: "inherit",
+		env: {
+			...process.env,
+			PI_CODING_AGENT_DIR: feynmanAgentDir,
+			FEYNMAN_CODING_AGENT_DIR: feynmanAgentDir,
+		},
 	});
 
-	session.subscribe((event) => {
-		if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-			process.stdout.write(event.assistantMessageEvent.delta);
-			return;
-		}
-
-		if (event.type === "tool_execution_start") {
-			process.stderr.write(`\n[tool] ${event.toolName}\n`);
-			return;
-		}
-
-		if (event.type === "tool_execution_end" && event.isError) {
-			process.stderr.write(`[tool-error] ${event.toolName}\n`);
-		}
+	await new Promise<void>((resolvePromise, reject) => {
+		child.on("error", reject);
+		child.on("exit", (code, signal) => {
+			if (signal) {
+				process.kill(process.pid, signal);
+				return;
+			}
+			process.exitCode = code ?? 0;
+			resolvePromise();
+		});
 	});
-
-	const initialPrompt = values.prompt ?? (positionals.length > 0 ? positionals.join(" ") : undefined);
-
-	if (initialPrompt) {
-		await session.prompt(initialPrompt);
-		process.stdout.write("\n");
-		session.dispose();
-		return;
-	}
-
-	console.log("Feynman research agent");
-	console.log(`working dir: ${workingDir}`);
-	console.log(`session dir: ${sessionDir}`);
-	console.log("type /help for commands");
-
-	const rl = readline.createInterface({ input, output });
-
-	try {
-		while (true) {
-			const line = (await rl.question("feynman> ")).trim();
-			if (!line) {
-				continue;
-			}
-
-			if (line === "/exit" || line === "/quit") {
-				break;
-			}
-
-			if (line === "/help") {
-				printHelp();
-				continue;
-			}
-
-			if (line === "/alpha-login") {
-				const result = await loginAlpha();
-				const name =
-					(result.userInfo &&
-					typeof result.userInfo === "object" &&
-					"name" in result.userInfo &&
-					typeof result.userInfo.name === "string")
-						? result.userInfo.name
-						: getAlphaUserName();
-				console.log(name ? `alphaXiv login complete: ${name}` : "alphaXiv login complete");
-				continue;
-			}
-
-			if (line === "/alpha-logout") {
-				logoutAlpha();
-				console.log("alphaXiv auth cleared");
-				continue;
-			}
-
-			if (line === "/alpha-status") {
-				if (isAlphaLoggedIn()) {
-					const name = getAlphaUserName();
-					console.log(name ? `alphaXiv logged in as ${name}` : "alphaXiv logged in");
-				} else {
-					console.log("alphaXiv not logged in");
-				}
-				continue;
-			}
-
-			if (line === "/new") {
-				await session.newSession();
-				console.log("started a new session");
-				continue;
-			}
-
-			await session.prompt(line);
-			process.stdout.write("\n");
-		}
-	} finally {
-		rl.close();
-		session.dispose();
-	}
 }
 
 main().catch((error) => {

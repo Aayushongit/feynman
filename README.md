@@ -42,6 +42,7 @@ npm run start
 ```
 
 Feynman uses Pi under the hood, but the user-facing entrypoint is `feynman`, not `pi`.
+When you run `feynman`, it launches the real Pi interactive TUI with Feynman's research extensions, skills, prompts, and package stack preloaded.
 
 ## Commands
 
