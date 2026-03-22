@@ -23,190 +23,6 @@ import {
 import { buildFeynmanSystemPrompt } from "./feynman-prompt.js";
 
 type ThinkingLevel = "off" | "low" | "medium" | "high";
-type Rgb = { r: number; g: number; b: number };
-type ThemeColorValue = string | number;
-type ThemeJson = {
-	$schema?: string;
-	name: string;
-	vars?: Record<string, ThemeColorValue>;
-	colors: Record<string, ThemeColorValue>;
-	export?: Record<string, ThemeColorValue>;
-};
-
-const OSC11_QUERY = "\u001b]11;?\u0007";
-const OSC11_RESPONSE_PATTERN =
-	/\u001b]11;(?:rgb:([0-9a-fA-F]{2,4})\/([0-9a-fA-F]{2,4})\/([0-9a-fA-F]{2,4})|#?([0-9a-fA-F]{6}))(?:\u0007|\u001b\\)/;
-const DEFAULT_SAGE_RGB: Rgb = { r: 0x88, g: 0xa8, b: 0x8a };
-
-function parseHexComponent(component: string): number {
-	const value = Number.parseInt(component, 16);
-	if (Number.isNaN(value)) {
-		throw new Error(`Invalid OSC 11 component: ${component}`);
-	}
-	if (component.length === 2) {
-		return value;
-	}
-	return Math.round(value / ((1 << (component.length * 4)) - 1) * 255);
-}
-
-function parseHexColor(color: string): Rgb | undefined {
-	const match = color.trim().match(/^#?([0-9a-fA-F]{6})$/);
-	if (!match) {
-		return undefined;
-	}
-
-	return {
-		r: Number.parseInt(match[1].slice(0, 2), 16),
-		g: Number.parseInt(match[1].slice(2, 4), 16),
-		b: Number.parseInt(match[1].slice(4, 6), 16),
-	};
-}
-
-function rgbToHex(rgb: Rgb): string {
-	return `#${[rgb.r, rgb.g, rgb.b]
-		.map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0"))
-		.join("")}`;
-}
-
-function blendRgb(base: Rgb, tint: Rgb, alpha: number): Rgb {
-	const mix = (baseChannel: number, tintChannel: number) =>
-		baseChannel + (tintChannel - baseChannel) * alpha;
-	return {
-		r: mix(base.r, tint.r),
-		g: mix(base.g, tint.g),
-		b: mix(base.b, tint.b),
-	};
-}
-
-function isLightRgb(rgb: Rgb): boolean {
-	const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
-	return luminance >= 0.6;
-}
-
-function resolveThemeColorValue(
-	value: ThemeColorValue | undefined,
-	vars: Record<string, ThemeColorValue> | undefined,
-	visited = new Set<string>(),
-): ThemeColorValue | undefined {
-	if (value === undefined || typeof value === "number" || value === "" || value.startsWith("#")) {
-		return value;
-	}
-	if (!vars || !(value in vars) || visited.has(value)) {
-		return value;
-	}
-	visited.add(value);
-	return resolveThemeColorValue(vars[value], vars, visited);
-}
-
-function resolveThemeRgb(
-	value: ThemeColorValue | undefined,
-	vars: Record<string, ThemeColorValue> | undefined,
-): Rgb | undefined {
-	const resolved = resolveThemeColorValue(value, vars);
-	return typeof resolved === "string" ? parseHexColor(resolved) : undefined;
-}
-
-function deriveMessageBackgrounds(themeJson: ThemeJson, terminalBackgroundHex: string): Pick<ThemeJson["colors"], "userMessageBg" | "customMessageBg"> | undefined {
-	const terminalBackground = parseHexColor(terminalBackgroundHex);
-	if (!terminalBackground) {
-		return undefined;
-	}
-
-	const tint =
-		resolveThemeRgb(themeJson.colors.accent, themeJson.vars) ??
-		resolveThemeRgb(themeJson.vars?.sage, themeJson.vars) ??
-		DEFAULT_SAGE_RGB;
-	const lightBackground = isLightRgb(terminalBackground);
-	const userAlpha = lightBackground ? 0.15 : 0.23;
-	const customAlpha = lightBackground ? 0.11 : 0.17;
-
-	return {
-		userMessageBg: rgbToHex(blendRgb(terminalBackground, tint, userAlpha)),
-		customMessageBg: rgbToHex(blendRgb(terminalBackground, tint, customAlpha)),
-	};
-}
-
-async function probeTerminalBackgroundHex(timeoutMs = 120): Promise<string | undefined> {
-	if (typeof process.env.FEYNMAN_TERMINAL_BG === "string" && process.env.FEYNMAN_TERMINAL_BG.trim()) {
-		return process.env.FEYNMAN_TERMINAL_BG.trim();
-	}
-	if (typeof process.env.PI_TERMINAL_BG === "string" && process.env.PI_TERMINAL_BG.trim()) {
-		return process.env.PI_TERMINAL_BG.trim();
-	}
-	if (!input.isTTY || !output.isTTY || typeof input.setRawMode !== "function") {
-		return undefined;
-	}
-
-	const wasRaw = "isRaw" in input ? Boolean((input as typeof input & { isRaw?: boolean }).isRaw) : false;
-	const wasFlowing = "readableFlowing" in input
-		? (input as typeof input & { readableFlowing?: boolean | null }).readableFlowing
-		: null;
-
-	return await new Promise<string | undefined>((resolve) => {
-		let settled = false;
-		let buffer = "";
-
-		const finish = (value: string | undefined) => {
-			if (settled) {
-				return;
-			}
-			settled = true;
-			clearTimeout(timer);
-			input.off("data", onData);
-			try {
-				if (!wasRaw) {
-					input.setRawMode(false);
-				}
-			} catch {
-				// Ignore raw mode restore failures and return best-effort detection.
-			}
-			if (wasFlowing !== true) {
-				input.pause();
-			}
-			resolve(value);
-		};
-
-		const onData = (chunk: string | Buffer) => {
-			buffer += chunk.toString("utf8");
-			const match = buffer.match(OSC11_RESPONSE_PATTERN);
-			if (!match) {
-				if (buffer.length > 512) {
-					finish(undefined);
-				}
-				return;
-			}
-
-			if (match[4]) {
-				finish(`#${match[4].toLowerCase()}`);
-				return;
-			}
-
-			try {
-				finish(
-					rgbToHex({
-						r: parseHexComponent(match[1]),
-						g: parseHexComponent(match[2]),
-						b: parseHexComponent(match[3]),
-					}),
-				);
-			} catch {
-				finish(undefined);
-			}
-		};
-
-		const timer = setTimeout(() => finish(undefined), timeoutMs);
-		input.on("data", onData);
-
-		try {
-			if (!wasRaw) {
-				input.setRawMode(true);
-			}
-			output.write(OSC11_QUERY);
-		} catch {
-			finish(undefined);
-		}
-	});
-}
 
 function printHelp(): void {
 	console.log(`Feynman commands:
@@ -316,7 +132,6 @@ function patchEmbeddedPiBranding(piPackageRoot: string): void {
 	const packageJsonPath = resolve(piPackageRoot, "package.json");
 	const cliPath = resolve(piPackageRoot, "dist", "cli.js");
 	const interactiveModePath = resolve(piPackageRoot, "dist", "modes", "interactive", "interactive-mode.js");
-	const footerPath = resolve(piPackageRoot, "dist", "modes", "interactive", "components", "footer.js");
 
 	if (existsSync(packageJsonPath)) {
 		const pkg = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
@@ -348,42 +163,6 @@ function patchEmbeddedPiBranding(piPackageRoot: string): void {
 					.replace("`π - ${cwdBasename}`", "`feynman - ${cwdBasename}`"),
 				"utf8",
 			);
-		}
-	}
-
-	if (existsSync(footerPath)) {
-		const footerSource = readFileSync(footerPath, "utf8");
-		const footerOriginal = [
-			'        // Add thinking level indicator if model supports reasoning',
-			'        let rightSideWithoutProvider = modelName;',
-			'        if (state.model?.reasoning) {',
-			'            const thinkingLevel = state.thinkingLevel || "off";',
-			'            rightSideWithoutProvider =',
-			'                thinkingLevel === "off" ? `${modelName} • thinking off` : `${modelName} • ${thinkingLevel}`;',
-			'        }',
-			'        // Prepend the provider in parentheses if there are multiple providers and there\'s enough room',
-			'        let rightSide = rightSideWithoutProvider;',
-			'        if (this.footerData.getAvailableProviderCount() > 1 && state.model) {',
-			'            rightSide = `(${state.model.provider}) ${rightSideWithoutProvider}`;',
-		].join("\n");
-		const footerReplacement = [
-			'        // Add thinking level indicator if model supports reasoning',
-			'        const modelLabel = theme.fg("accent", modelName);',
-			'        let rightSideWithoutProvider = modelLabel;',
-			'        if (state.model?.reasoning) {',
-			'            const thinkingLevel = state.thinkingLevel || "off";',
-			'            const separator = theme.fg("dim", " • ");',
-			'            rightSideWithoutProvider = thinkingLevel === "off"',
-			'                ? `${modelLabel}${separator}${theme.fg("muted", "thinking off")}`',
-			'                : `${modelLabel}${separator}${theme.getThinkingBorderColor(thinkingLevel)(thinkingLevel)}`;',
-			'        }',
-			'        // Prepend the provider in parentheses if there are multiple providers and there\'s enough room',
-			'        let rightSide = rightSideWithoutProvider;',
-			'        if (this.footerData.getAvailableProviderCount() > 1 && state.model) {',
-			'            rightSide = `${theme.fg("muted", `(${state.model.provider})`)} ${rightSideWithoutProvider}`;',
-		].join("\n");
-		if (footerSource.includes(footerOriginal)) {
-			writeFileSync(footerPath, footerSource.replace(footerOriginal, footerReplacement), "utf8");
 		}
 	}
 }
@@ -494,6 +273,9 @@ function normalizeFeynmanSettings(
 
 	if (!settings.defaultThinkingLevel) {
 		settings.defaultThinkingLevel = defaultThinkingLevel;
+	}
+	if (settings.editorPaddingX === undefined) {
+		settings.editorPaddingX = 1;
 	}
 	settings.theme = "feynman";
 	settings.quietStartup = true;
@@ -749,7 +531,7 @@ function syncDirectory(sourceDir: string, targetDir: string): void {
 	}
 }
 
-function syncFeynmanTheme(appRoot: string, agentDir: string, terminalBackgroundHex?: string): void {
+function syncFeynmanTheme(appRoot: string, agentDir: string): void {
 	const sourceThemePath = resolve(appRoot, ".pi", "themes", "feynman.json");
 	const targetThemeDir = resolve(agentDir, "themes");
 	const targetThemePath = resolve(targetThemeDir, "feynman.json");
@@ -759,32 +541,7 @@ function syncFeynmanTheme(appRoot: string, agentDir: string, terminalBackgroundH
 	}
 
 	mkdirSync(targetThemeDir, { recursive: true });
-
-	const sourceTheme = readFileSync(sourceThemePath, "utf8");
-	if (!terminalBackgroundHex) {
-		writeFileSync(targetThemePath, sourceTheme, "utf8");
-		return;
-	}
-
-	try {
-		const parsedTheme = JSON.parse(sourceTheme) as ThemeJson;
-		const derivedBackgrounds = deriveMessageBackgrounds(parsedTheme, terminalBackgroundHex);
-		if (!derivedBackgrounds) {
-			writeFileSync(targetThemePath, sourceTheme, "utf8");
-			return;
-		}
-
-		const generatedTheme: ThemeJson = {
-			...parsedTheme,
-			colors: {
-				...parsedTheme.colors,
-				...derivedBackgrounds,
-			},
-		};
-		writeFileSync(targetThemePath, JSON.stringify(generatedTheme, null, 2) + "\n", "utf8");
-	} catch {
-		writeFileSync(targetThemePath, sourceTheme, "utf8");
-	}
+	writeFileSync(targetThemePath, readFileSync(sourceThemePath, "utf8"), "utf8");
 }
 
 function syncFeynmanAgents(appRoot: string, agentDir: string): void {
@@ -826,10 +583,9 @@ async function main(): Promise<void> {
 
 	const workingDir = resolve(values.cwd ?? process.cwd());
 	const sessionDir = resolve(values["session-dir"] ?? resolve(homedir(), ".feynman", "sessions"));
-	const terminalBackgroundHex = await probeTerminalBackgroundHex();
 	mkdirSync(sessionDir, { recursive: true });
 	mkdirSync(feynmanAgentDir, { recursive: true });
-	syncFeynmanTheme(appRoot, feynmanAgentDir, terminalBackgroundHex);
+	syncFeynmanTheme(appRoot, feynmanAgentDir);
 	syncFeynmanAgents(appRoot, feynmanAgentDir);
 	const feynmanSettingsPath = resolve(feynmanAgentDir, "settings.json");
 	const feynmanAuthPath = resolve(feynmanAgentDir, "auth.json");
@@ -926,8 +682,6 @@ async function main(): Promise<void> {
 			...process.env,
 			PI_CODING_AGENT_DIR: feynmanAgentDir,
 			FEYNMAN_CODING_AGENT_DIR: feynmanAgentDir,
-			FEYNMAN_TERMINAL_BG: terminalBackgroundHex,
-			PI_TERMINAL_BG: terminalBackgroundHex,
 			FEYNMAN_PI_NPM_ROOT: resolve(appRoot, ".pi", "npm", "node_modules"),
 			FEYNMAN_SESSION_DIR: sessionDir,
 			PI_SESSION_DIR: sessionDir,
