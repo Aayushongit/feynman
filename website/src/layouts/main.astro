@@ -93,14 +93,14 @@ const {
       </div>
     </nav>
 
-    <main class="flex-1">
+    <main class="flex flex-1 flex-col">
       <slot />
     </main>
 
     <footer>
       <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
         <p class="text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} Feynman. Open source under MIT.
+          &copy; {new Date().getFullYear()} Companion, Inc.
         </p>
         <div class="flex items-center gap-4 text-sm">
           <a href="/docs/getting-started/installation" class="text-muted-foreground transition-colors hover:text-foreground">Docs</a>
