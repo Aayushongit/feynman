@@ -124,6 +124,9 @@ function copyPackageFiles(appDir) {
 function installAppDependencies(appDir) {
 	if (existsSync(rootNodeModulesPath)) {
 		cpSync(rootNodeModulesPath, resolve(appDir, "node_modules"), { recursive: true });
+		if (process.platform === "win32") {
+			return;
+		}
 		run("npm", ["prune", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", "--loglevel", "error"], {
 			cwd: appDir,
 		});
