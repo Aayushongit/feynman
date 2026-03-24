@@ -58,6 +58,7 @@ Four bundled research agents, dispatched automatically or via subagent commands.
 ## Tools
 
 - **[AlphaXiv](https://www.alphaxiv.org/)** — paper search, Q&A, code reading, persistent annotations
+- **[Agent Computer](https://agentcomputer.ai)** — secure cloud execution for experiments, replications, and long-running research
 - **Web search** — Gemini or Perplexity, zero-config default via signed-in Chromium
 - **Session search** — indexed recall across prior research sessions
 - **Preview** — browser and PDF export of generated artifacts
@@ -81,7 +82,7 @@ feynman search status               # web search config
 
 ## How it works
 
-Built on [Pi](https://github.com/mariozechner/pi-coding-agent) and [Alpha Hub](https://github.com/getcompanion-ai/alpha-hub). Pi provides the agent runtime — file access, shell execution, persistent sessions, custom extensions. Alpha Hub connects to [alphaXiv](https://www.alphaxiv.org/) for paper search, Q&A, code reading, and annotations.
+Built on [Pi](https://github.com/mariozechner/pi-coding-agent), [alphaXiv](https://www.alphaxiv.org/), and [Agent Computer](https://agentcomputer.ai). Pi provides the agent runtime. alphaXiv powers paper search, Q&A, code reading, and annotations. Agent Computer provides secure cloud machines for running experiments and replications.
 
 Every output is source-grounded. Claims link to papers, docs, or repos with direct URLs.
 
@@ -96,4 +97,4 @@ cd feynman && npm install && npm run start
 
 [Docs](https://feynman.companion.ai/docs) · [MIT License](LICENSE)
 
-Built on [Pi](https://github.com/mariozechner/pi-coding-agent) and [Alpha Hub](https://github.com/getcompanion-ai/alpha-hub).
+Built on [Pi](https://github.com/mariozechner/pi-coding-agent), [alphaXiv](https://www.alphaxiv.org/), and [Agent Computer](https://agentcomputer.ai).

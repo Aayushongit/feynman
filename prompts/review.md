@@ -7,6 +7,7 @@ topLevelCli: true
 Review this AI research artifact: $@
 
 Requirements:
+- Before starting, outline what will be reviewed and the review criteria (novelty, empirical rigor, baselines, reproducibility, etc.). Present the plan to the user and confirm before proceeding.
 - Spawn a `researcher` subagent to gather evidence on the artifact — inspect the paper, code, cited work, and any linked experimental artifacts. Save to `research.md`.
 - Spawn a `reviewer` subagent with `research.md` to produce the final peer review with inline annotations.
 - For small or simple artifacts where evidence gathering is overkill, run the `reviewer` subagent directly instead.

@@ -40,6 +40,8 @@ Write the plan to `outputs/.plans/deepresearch-plan.md` as a self-contained arti
 
 Also save the plan with `memory_remember` (type: `fact`, key: `deepresearch.plan`) so it survives context truncation.
 
+Present the plan to the user and ask them to confirm before proceeding. If the user wants changes, revise the plan first.
+
 ## 2. Scale decision
 
 | Query type | Execution |
@@ -106,6 +108,8 @@ Detailed findings organized by theme or question.
 ## Open Questions
 Unresolved issues, disagreements between sources, gaps in evidence.
 ```
+
+When the research includes quantitative data (benchmarks, performance comparisons, trends), generate charts using `pi-charts`. Use Mermaid diagrams for architectures and processes. Every visual must have a caption and reference the underlying data.
 
 Save this draft to a temp file (e.g., `draft.md` in the chain artifacts dir or a temp path).
 

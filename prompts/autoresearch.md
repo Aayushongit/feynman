@@ -6,19 +6,46 @@ topLevelCli: true
 ---
 Start an autoresearch optimization loop for: $@
 
-This command uses pi-autoresearch. Enter autoresearch mode and begin the autonomous experiment loop.
+This command uses pi-autoresearch.
 
-## Behavior
+## Step 1: Gather
 
-- If `autoresearch.md` and `autoresearch.jsonl` already exist in the project, resume the existing session with the user's input as additional context.
-- Otherwise, gather the optimization target from the user:
-  - What to optimize (test speed, bundle size, training loss, build time, etc.)
-  - The benchmark command to run
-  - The metric name, unit, and direction (lower/higher is better)
-  - Files in scope for changes
-- Then initialize the session: create `autoresearch.md`, `autoresearch.sh`, run the baseline, and start looping.
+If `autoresearch.md` and `autoresearch.jsonl` already exist, ask the user if they want to resume or start fresh.
 
-## Loop
+Otherwise, collect the following from the user before doing anything else:
+- What to optimize (test speed, bundle size, training loss, build time, etc.)
+- The benchmark command to run
+- The metric name, unit, and direction (lower/higher is better)
+- Files in scope for changes
+- Maximum number of iterations (default: 20)
+
+## Step 2: Environment
+
+Ask the user where to run:
+- **Local** — run in the current working directory
+- **New git branch** — create a branch so main stays clean
+- **Virtual environment** — create an isolated venv/conda env first
+- **Cloud** — delegate to a remote Agent Computer machine via `/delegate`
+
+Do not proceed without a clear answer.
+
+## Step 3: Confirm
+
+Present the full plan to the user before starting:
+
+```
+Optimization target: [metric] ([direction])
+Benchmark command:   [command]
+Files in scope:      [files]
+Environment:         [chosen environment]
+Max iterations:      [N]
+```
+
+Ask the user to confirm. Do not start the loop without explicit approval.
+
+## Step 4: Run
+
+Initialize the session: create `autoresearch.md`, `autoresearch.sh`, run the baseline, and start looping.
 
 Each iteration: edit → commit → `run_experiment` → `log_experiment` → keep or revert → repeat. Do not stop unless interrupted or `maxIterations` is reached.
 

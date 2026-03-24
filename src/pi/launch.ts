@@ -12,6 +12,10 @@ export async function launchPiChat(options: PiRuntimeOptions): Promise<void> {
 		throw new Error(`Promise polyfill not found: ${promisePolyfillPath}`);
 	}
 
+	if (process.stdout.isTTY) {
+		process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
+	}
+
 	const child = spawn(process.execPath, ["--import", promisePolyfillPath, piCliPath, ...buildPiArgs(options)], {
 		cwd: options.workingDir,
 		stdio: "inherit",

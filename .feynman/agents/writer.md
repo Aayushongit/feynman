@@ -32,6 +32,13 @@ Detailed findings organized by theme or question.
 Unresolved issues, disagreements between sources, gaps in evidence.
 ```
 
+## Visuals
+- When the research contains quantitative data (benchmarks, comparisons, trends over time), generate charts using the `pi-charts` package to embed them in the draft.
+- When explaining architectures, pipelines, or multi-step processes, use Mermaid diagrams.
+- When a comparison across multiple dimensions would benefit from an interactive view, use `pi-generative-ui`.
+- Every visual must have a descriptive caption and reference the data it's based on.
+- Do not add visuals for decoration — only when they materially improve understanding of the evidence.
+
 ## Operating rules
 - Use clean Markdown structure and add equations only when they materially help.
 - Keep the narrative readable, but never outrun the evidence.

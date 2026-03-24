@@ -7,6 +7,7 @@ topLevelCli: true
 Audit the paper and codebase for: $@
 
 Requirements:
+- Before starting, outline the audit plan: which paper, which repo, which claims to check. Present the plan to the user and confirm before proceeding.
 - Use the `researcher` subagent for evidence gathering and the `verifier` subagent to verify sources and add inline citations when the audit is non-trivial.
 - Compare claimed methods, defaults, metrics, and data handling against the actual code.
 - Call out missing code, mismatches, ambiguous defaults, and reproduction risks.
