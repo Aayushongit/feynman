@@ -26,6 +26,7 @@ export function resolvePiPaths(appRoot: string) {
 		piCliPath: resolve(appRoot, "node_modules", "@mariozechner", "pi-coding-agent", "dist", "cli.js"),
 		promisePolyfillPath: resolve(appRoot, "dist", "system", "promise-polyfill.js"),
 		researchToolsPath: resolve(appRoot, "extensions", "research-tools.ts"),
+		fireworksProviderPath: resolve(appRoot, "extensions", "fireworks-provider.ts"),
 		promptTemplatePath: resolve(appRoot, "prompts"),
 		systemPromptPath: resolve(appRoot, ".feynman", "SYSTEM.md"),
 		piWorkspaceNodeModulesPath: resolve(appRoot, ".feynman", "npm", "node_modules"),
@@ -52,6 +53,8 @@ export function buildPiArgs(options: PiRuntimeOptions): string[] {
 		options.sessionDir,
 		"--extension",
 		paths.researchToolsPath,
+		"--extension",
+		paths.fireworksProviderPath,
 		"--prompt-template",
 		paths.promptTemplatePath,
 	];

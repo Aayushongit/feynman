@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { AuthStorage, ModelRegistry, type PackageSource } from "@mariozechner/pi-coding-agent";
 
 import { CORE_PACKAGE_SOURCES, shouldPruneLegacyDefaultPackages } from "./package-presets.js";
+import { DEFAULT_FIREWORKS_MODEL_ID, FIREWORKS_SERVERLESS_MODEL_IDS } from "../model/fireworks-catalog.js";
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
@@ -113,6 +114,14 @@ export function normalizeFeynmanSettings(
 		settings.packages = [...CORE_PACKAGE_SOURCES];
 	} else if (shouldPruneLegacyDefaultPackages(settings.packages as PackageSource[])) {
 		settings.packages = [...CORE_PACKAGE_SOURCES];
+	}
+
+	if (
+		settings.defaultProvider === "fireworks" &&
+		typeof settings.defaultModel === "string" &&
+		!FIREWORKS_SERVERLESS_MODEL_IDS.has(settings.defaultModel)
+	) {
+		settings.defaultModel = DEFAULT_FIREWORKS_MODEL_ID;
 	}
 
 	const authStorage = AuthStorage.create(authPath);

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { DEFAULT_FIREWORKS_MODEL_ID } from "../src/model/fireworks-catalog.js";
 import { CORE_PACKAGE_SOURCES, getOptionalPackagePresetSources, shouldPruneLegacyDefaultPackages } from "../src/pi/package-presets.js";
 import { normalizeFeynmanSettings, normalizeThinkingLevel } from "../src/pi/settings.js";
 
@@ -63,6 +64,37 @@ test("normalizeFeynmanSettings prunes the legacy slow default package set", () =
 
 	const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as { packages?: string[] };
 	assert.deepEqual(settings.packages, [...CORE_PACKAGE_SOURCES]);
+});
+
+test("normalizeFeynmanSettings replaces a removed Fireworks default model", () => {
+	const root = mkdtempSync(join(tmpdir(), "feynman-settings-"));
+	const settingsPath = join(root, "settings.json");
+	const bundledSettingsPath = join(root, "bundled-settings.json");
+	const authPath = join(root, "auth.json");
+
+	writeFileSync(
+		settingsPath,
+		JSON.stringify(
+			{
+				defaultProvider: "fireworks",
+				defaultModel: "accounts/fireworks/models/mixtral-8x7b-instruct",
+			},
+			null,
+			2,
+		) + "\n",
+		"utf8",
+	);
+	writeFileSync(bundledSettingsPath, "{}\n", "utf8");
+	writeFileSync(authPath, "{}\n", "utf8");
+
+	normalizeFeynmanSettings(settingsPath, bundledSettingsPath, "medium", authPath);
+
+	const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as {
+		defaultProvider?: string;
+		defaultModel?: string;
+	};
+	assert.equal(settings.defaultProvider, "fireworks");
+	assert.equal(settings.defaultModel, DEFAULT_FIREWORKS_MODEL_ID);
 });
 
 test("optional package presets map friendly aliases", () => {

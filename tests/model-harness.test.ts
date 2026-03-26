@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { FIREWORKS_SERVERLESS_MODELS } from "../src/model/fireworks-catalog.js";
 import { resolveInitialPrompt } from "../src/cli.js";
 import { buildModelStatusSnapshotFromRecords, chooseRecommendedModel } from "../src/model/catalog.js";
 import { setDefaultModelSpec } from "../src/model/commands.js";
@@ -57,6 +58,31 @@ test("buildModelStatusSnapshotFromRecords flags an invalid current model and sug
 	assert.ok(snapshot.guidance.some((line) => line.includes("Configured default model is unavailable")));
 });
 
+test("Fireworks provider only exposes vetted serverless models", () => {
+	const ids = FIREWORKS_SERVERLESS_MODELS.map((model) => model.id);
+
+	assert.deepEqual(ids, [
+		"accounts/fireworks/models/glm-5",
+		"accounts/fireworks/models/glm-4p7",
+		"accounts/fireworks/models/kimi-k2-instruct-0905",
+		"accounts/fireworks/models/kimi-k2-thinking",
+		"accounts/fireworks/models/kimi-k2p5",
+		"accounts/fireworks/models/deepseek-v3p1",
+		"accounts/fireworks/models/deepseek-v3p2",
+		"accounts/fireworks/models/qwen3-8b",
+		"accounts/fireworks/models/qwen3-vl-235b-a22b-instruct",
+		"accounts/fireworks/models/qwen3-vl-30b-a3b-instruct",
+		"accounts/fireworks/models/qwen3-vl-30b-a3b-thinking",
+		"accounts/fireworks/models/minimax-m2p1",
+		"accounts/fireworks/models/minimax-m2p5",
+		"accounts/fireworks/models/gpt-oss-120b",
+		"accounts/fireworks/models/gpt-oss-20b",
+	]);
+	assert.ok(!ids.includes("accounts/fireworks/models/mixtral-8x7b-instruct"));
+	assert.ok(!ids.includes("accounts/fireworks/models/kimi-k2-instruct"));
+	assert.ok(!ids.includes("accounts/fireworks/models/minimax-m1"));
+});
+
 test("resolveInitialPrompt maps top-level research commands to Pi slash workflows", () => {
 	const workflows = new Set(["lit", "watch", "jobs", "deepresearch"]);
 	assert.equal(resolveInitialPrompt("lit", ["tool-using", "agents"], undefined, workflows), "/lit tool-using agents");
@@ -65,4 +91,3 @@ test("resolveInitialPrompt maps top-level research commands to Pi slash workflow
 	assert.equal(resolveInitialPrompt("chat", ["hello"], undefined, workflows), "hello");
 	assert.equal(resolveInitialPrompt("unknown", ["topic"], undefined, workflows), "unknown topic");
 });
-
