@@ -51,6 +51,14 @@ feynman --thinking high
 
 ## Environment variables
 
+Feynman reads environment variables from the shell that launches it. It does not load repository `.env` files for provider credentials. For `bash`, put exports in `~/.bashrc` and reload your shell:
+
+```bash
+echo 'export OPENAI_API_KEY="your-key-here"' >> ~/.bashrc
+echo 'export ANTHROPIC_API_KEY="your-key-here"' >> ~/.bashrc
+source ~/.bashrc
+```
+
 Feynman respects the following environment variables, which take precedence over `settings.json`:
 
 | Variable | Description |

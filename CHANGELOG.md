@@ -59,3 +59,12 @@ Use this file to track chronology, not release notes. Keep entries short, factua
 - Failed / learned: PowerShell installer behavior was not executed locally because PowerShell is not installed in this environment.
 - Blockers: None for the Unix installer flow; Windows remains syntax-only by inspection.
 - Next: If users want this exposed more prominently, add a dedicated docs/reference page and a homepage-specific skills-only CTA instead of a text link.
+
+### 2026-03-27 00:51 IST — env-secret-hardening
+
+- Objective: Remove repository-level secret loading and sanitize env placeholders after an API key exposure scare.
+- Changed: Stopped auto-loading `.env` from `src/cli.ts`; removed `dotenv` from `package.json`, `package-lock.json`, and `pnpm-lock.yaml`; tightened `.gitignore` to ignore `.env*` while keeping `.env.example`; updated `.env.example`, `README.md`, and `website/src/content/docs/getting-started/configuration.md` to keep provider variables as blank placeholders and direct real credentials to `~/.bashrc`.
+- Verified: `git status` shows `.env` ignored and untracked; `npm test` passed with 27/27 tests; root runtime and lockfiles no longer reference `dotenv`.
+- Failed / learned: `npm run typecheck` still fails due to a pre-existing type error in `extensions/fireworks-provider.ts` where `string[]` is assigned to `("text" | "image")[]`.
+- Blockers: Remote remediation is still manual if a real key was already pushed to GitHub or used outside local `.env`.
+- Next: Rotate the exposed provider keys immediately, purge any leaked secret from remote Git history if it was committed, and update deployment/provider settings to use shell or platform env vars only.

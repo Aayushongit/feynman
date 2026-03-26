@@ -1,5 +1,3 @@
-import "dotenv/config";
-
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";

@@ -19,6 +19,14 @@ curl -fsSL https://feynman.is/install | bash
 
 If you install via `pnpm` or `bun` instead of the standalone bundle, Feynman requires Node.js `20.18.1` or newer.
 
+Provider API keys should be exported from your shell profile, not stored in repository `.env` files. For `bash`:
+
+```bash
+echo 'export OPENAI_API_KEY="your-key-here"' >> ~/.bashrc
+echo 'export ANTHROPIC_API_KEY="your-key-here"' >> ~/.bashrc
+source ~/.bashrc
+```
+
 ### Skills Only
 
 If you want just the research skills without the full terminal app:
